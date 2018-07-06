@@ -7,6 +7,7 @@ from pyquery import PyQuery as pq
 from settings import *
 import requests
 from mysql import MySQL
+import time
 
 
 class Spider():
@@ -18,7 +19,6 @@ class Spider():
         'Accept-Language': 'zh-CN,zh;q=0.9',
         'Cache-Control': 'max-age=0',
         'Connection': 'keep-alive',
-        'Cookie': 'pgv_pvi=4957974528; main_login=wx; vuserid=144115210108858683; pgv_pvid=1182295365; AMCV_248F210755B762187F000101%40AdobeOrg=-1891778711%7CMCIDTS%7C17716%7CMCMID%7C39367175559010545302503241949109946279%7CMCAAMLH-1531200604%7C11%7CMCAAMB-1531200604%7CRKhpRz8krg2tLO6pguXWp5olkAcUniQYPHaMWWgdJ3xzPWQmdj0y%7CMCOPTOUT-1530603004s%7CNONE%7CMCAID%7CNONE%7CMCSYNCSOP%7C411-17723%7CvVersion%7C2.4.0; eas_sid=w1g553p0Q6L8F973J4L54038q5; rankv=2018062218; pac_uid=0_5b3c902861e0a; rewardsn=; wxtokenkey=777',
         'Host': 'mp.weixin.qq.com',
         'Referer': 'http://weixin.sogou.com/weixin?oq=&query=NBA&_sug_type_=1&sut=0&lkt=0%2C0%2C0&s_from=input&ri=5&_sug_=n&type=2&sst0=1530794048607&page=1&ie=utf8&p=40040108&dp=1&w=01015002&dr=1',
         'Upgrade-Insecure-Requests': '1',
@@ -73,11 +73,12 @@ class Spider():
 
     def schedule(self):
         while not self.queue.empty():
+
             weixin_request = self.queue.pop()
             callback = weixin_request.callback
             print('schedule', weixin_request.url)
             response = self.request(weixin_request)
-            # print(response.headers)
+            time.sleep(1)
             if response and response.status_code in VALID_STATUS:
                 results = list(callback(response))
                 if results:
@@ -94,8 +95,8 @@ class Spider():
 
     def error(self, weixin_request):
         weixin_request.fail_time = weixin_request.fail_time + 1
-        print('Request failed',weixin_request.fail_time,'times',weixin_request.url)
-        if weixin_request.fail_time< MAX_FAILED_TIME:
+        print('Request failed', weixin_request.fail_time, 'times', weixin_request.url)
+        if weixin_request.fail_time < MAX_FAILED_TIME:
             self.queue.add(weixin_request)
 
     def request(self, weixin_request):
@@ -105,11 +106,10 @@ class Spider():
                 if proxy:
                     proxies = {
                         'http': 'http://' + proxy,
-                        'https': 'https://' + proxy
+                        'https': 'http://' + proxy
                     }
-                    return self.session.send(weixin_request.prepare(), timeout=weixin_request.timeout,
-                                             allow_redirects=False, proxies=proxies)
-            return self.session.send(weixin_request.prepare(), timeout=weixin_request.timeout, allow_redirects=False)
+                    return self.session.send(weixin_request.prepare(), timeout=weixin_request.timeout, proxies=proxies)
+            return self.session.send(weixin_request.prepare(), timeout=weixin_request.timeout)
         except (requests.ConnectionError, requests.ReadTimeout) as e:
             print(e.args)
             return False
@@ -117,7 +117,7 @@ class Spider():
     def start(self):
         self.session.headers.update(self.headers)
         start_url = self.base_url + '?' + urlencode({'query': self.keyword, 'type': 2})
-        weixin_request = WeixinRequest(url=start_url, callback=self.parse_index, need_proxy=False)
+        weixin_request = WeixinRequest(url=start_url, callback=self.parse_index, need_proxy=True)
         self.queue.add(weixin_request)
 
     def run(self):
